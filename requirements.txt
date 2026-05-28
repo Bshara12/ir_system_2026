@@ -1,0 +1,10 @@
+pip install fastapi uvicorn nltk pytest httpx scikit-learn rank-bm25 sentence-transformers faiss-cpu
+pip install uvicorn
+pip install pytest
+للتجريب
+python -m uvicorn services.preprocessing.app:app --reload --port 8001
+بس يشتغل افتحو بالمتصفح 
+http://127.0.0.1:8001/docs
+
+للاختبارات الرسمية بالتيرمنل 
+python -m pytest services/preprocessing/tests/test_preprocessor.py -v
