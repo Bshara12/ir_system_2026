@@ -8,3 +8,63 @@ http://127.0.0.1:8001/docs
 
 للاختبارات الرسمية بالتيرمنل 
 python -m pytest services/preprocessing/tests/test_preprocessor.py -v
+
+
+لاختfhvfhv hg]hjh
+python -c "
+import sys
+sys.path.insert(0, '.')
+
+from services.indexing.dataset_loader import DatasetLoader
+
+loader = DatasetLoader()
+
+print('=' * 55)
+print('اختبار 1: معلومات مجموعة البيانات')
+print('=' * 55)
+
+info = loader.get_dataset_info('dataset1')
+
+for k, v in info.items():
+    print(f'  {k}: {v}')
+
+print()
+print('=' * 55)
+print('اختبار 2: stream_documents')
+print('=' * 55)
+
+for doc in loader.stream_documents('dataset1'):
+    print(f'ID: {doc.doc_id} | Title: {doc.title}')
+    print(doc.get_full_text()[:60])
+
+print()
+print('✅ كل شيء يعمل')
+"
+
+
+لاختبار الindex
+
+تنزيل
+pip install scikit-learn scipy numpy
+echo "✅ المكتبات جاهزة"
+
+tf-idf test
+
+
+# تشغيل الاختبارات
+python -m pytest services/indexing/tests/test_tfidf_indexer.py -v
+
+# تشغيل اختبار واحد فقط
+python -m pytest services/indexing/tests/test_tfidf_indexer.py::TestIntegration::test_full_cycle_build_save_load_query -v
+
+# تشغيل تجربة فهرسة حقيقية
+python -c "
+import sys; sys.path.insert(0, '.')
+from services.indexing.tfidf_indexer import TFIDFIndexer
+
+indexer = TFIDFIndexer()
+indexer.build_index('dataset1')
+indexer.save_index('dataset1')
+print('الفهرس جاهز!')
+"
+
