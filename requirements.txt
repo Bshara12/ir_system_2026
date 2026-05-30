@@ -68,3 +68,23 @@ indexer.save_index('dataset1')
 print('الفهرس جاهز!')
 "
 
+# تشغيل اختبارات BM25 فقط
+python -m pytest services/indexing/tests/test_bm25_indexer.py -v
+
+# تشغيل كل اختبارات المشروع دفعة واحدة
+python -m pytest services/ -v
+
+# تجربة بناء الفهرس يدوياً
+python -c "
+import sys; sys.path.insert(0, '.')
+from services.indexing.bm25_indexer import BM25Indexer
+indexer = BM25Indexer()
+indexer.build_index('dataset1', k1=1.5, b=0.75)
+indexer.save_index('dataset1')
+
+# اختبار بحث مباشر
+tokens = ['cloud', 'storag']
+results = indexer.get_top_n(tokens, n=3)
+for doc, score in results:
+    print(f'[{score:.3f}] {doc.title}: {doc.original_text[:50]}')
+"
