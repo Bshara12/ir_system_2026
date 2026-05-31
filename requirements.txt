@@ -8,3 +8,135 @@ http://127.0.0.1:8001/docs
 
 للاختبارات الرسمية بالتيرمنل 
 python -m pytest services/preprocessing/tests/test_preprocessor.py -v
+
+
+لاختfhvfhv hg]hjh
+python -c "
+import sys
+sys.path.insert(0, '.')
+
+from services.indexing.dataset_loader import DatasetLoader
+
+loader = DatasetLoader()
+
+print('=' * 55)
+print('اختبار 1: معلومات مجموعة البيانات')
+print('=' * 55)
+
+info = loader.get_dataset_info('dataset1')
+
+for k, v in info.items():
+    print(f'  {k}: {v}')
+
+print()
+print('=' * 55)
+print('اختبار 2: stream_documents')
+print('=' * 55)
+
+for doc in loader.stream_documents('dataset1'):
+    print(f'ID: {doc.doc_id} | Title: {doc.title}')
+    print(doc.get_full_text()[:60])
+
+print()
+print('✅ كل شيء يعمل')
+"
+
+
+لاختبار الindex
+
+تنزيل
+pip install scikit-learn scipy numpy
+echo "✅ المكتبات جاهزة"
+
+tf-idf test
+
+
+# تشغيل الاختبارات
+python -m pytest services/indexing/tests/test_tfidf_indexer.py -v
+
+# تشغيل اختبار واحد فقط
+python -m pytest services/indexing/tests/test_tfidf_indexer.py::TestIntegration::test_full_cycle_build_save_load_query -v
+
+# تشغيل تجربة فهرسة حقيقية
+python -c "
+import sys; sys.path.insert(0, '.')
+from services.indexing.tfidf_indexer import TFIDFIndexer
+
+indexer = TFIDFIndexer()
+indexer.build_index('dataset1')
+indexer.save_index('dataset1')
+print('الفهرس جاهز!')
+"
+
+# تشغيل اختبارات BM25 فقط
+python -m pytest services/indexing/tests/test_bm25_indexer.py -v
+
+# تشغيل كل اختبارات المشروع دفعة واحدة
+python -m pytest services/ -v
+
+# تجربة بناء الفهرس يدوياً
+python -c "
+import sys; sys.path.insert(0, '.')
+from services.indexing.bm25_indexer import BM25Indexer
+indexer = BM25Indexer()
+indexer.build_index('dataset1', k1=1.5, b=0.75)
+indexer.save_index('dataset1')
+
+# اختبار بحث مباشر
+tokens = ['cloud', 'storag']
+results = indexer.get_top_n(tokens, n=3)
+for doc, score in results:
+    print(f'[{score:.3f}] {doc.title}: {doc.original_text[:50]}')
+"
+
+
+خوارزمية ال embedding
+# ── تثبيت المكتبات الجديدة ──
+pip install sentence-transformers faiss-cpu
+
+# ── تشغيل اختبارات Embedding فقط ──
+python -m pytest services/indexing/tests/test_embedding_indexer.py -v
+
+# ── تشغيل كل اختبارات المشروع ──
+python -m pytest services/ -v
+
+# ── تجربة بناء الفهرس يدوياً (يحتاج internet لتحميل النموذج) ──
+python -c "
+import sys; sys.path.insert(0, '.')
+from services.indexing.embedding_indexer import EmbeddingIndexer
+
+indexer = EmbeddingIndexer()
+indexer.build_index('dataset1')
+indexer.save_index('dataset1')
+print('Stats:', indexer.get_stats())
+
+# بحث مباشر
+q = indexer.encode_query('cloud storage sync files')
+results = indexer.get_top_k(q, k=3)
+for doc, score in results:
+    print(f'[{score:.3f}] {doc.title}: {doc.original_text[:50]}')
+"
+
+
+
+inverted خوارزمية
+
+# تشغيل كل الاختبارات
+python -m pytest services/ -v
+
+# تشغيل اختبارات Indexing Service فقط
+python -m pytest services/indexing/tests/ -v
+
+# تشغيل الخدمة
+python -m uvicorn services.indexing.app:app --port 8002 --reload
+
+# اختبار يدوي: بناء الفهرس المقلوب
+python -c "
+import sys; sys.path.insert(0, '.')
+from services.indexing.inverted_index import InvertedIndex
+idx = InvertedIndex()
+idx.build_index('dataset1')
+print('Boolean AND:', idx.search_and(['cloud', 'storag']))
+print('Boolean OR:', idx.search_or(['cloud', 'ai']))
+print('Top terms:', idx.get_top_terms_by_df(5))
+"

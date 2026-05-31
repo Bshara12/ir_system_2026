@@ -1,0 +1,5 @@
+{"id": "d1", "title": "Cloud Storage", "text": "Cloud storage is useful for syncing files across devices. Services like Dropbox and Google Drive provide backup features."}
+{"id": "d2", "title": "AI Assistants", "text": "AI assistants like Siri use voice recognition and natural language processing to respond to user commands."}
+{"id": "d3", "title": "BM25 Algorithm", "text": "BM25 is a ranking function used in information retrieval. It improves on TF-IDF by normalizing term frequency and document length."}
+{"id": "d4", "title": "Python Programming", "text": "Python is used for machine learning, data science, and web development. It is popular in the AI community."}
+{"id": "d5", "title": "Information Retrieval", "text": "Information retrieval systems help users find relevant documents in large collections using queries and ranking algorithms."}
