@@ -116,3 +116,27 @@ results = indexer.get_top_k(q, k=3)
 for doc, score in results:
     print(f'[{score:.3f}] {doc.title}: {doc.original_text[:50]}')
 "
+
+
+
+inverted خوارزمية
+
+# تشغيل كل الاختبارات
+python -m pytest services/ -v
+
+# تشغيل اختبارات Indexing Service فقط
+python -m pytest services/indexing/tests/ -v
+
+# تشغيل الخدمة
+python -m uvicorn services.indexing.app:app --port 8002 --reload
+
+# اختبار يدوي: بناء الفهرس المقلوب
+python -c "
+import sys; sys.path.insert(0, '.')
+from services.indexing.inverted_index import InvertedIndex
+idx = InvertedIndex()
+idx.build_index('dataset1')
+print('Boolean AND:', idx.search_and(['cloud', 'storag']))
+print('Boolean OR:', idx.search_or(['cloud', 'ai']))
+print('Top terms:', idx.get_top_terms_by_df(5))
+"
