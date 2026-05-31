@@ -88,3 +88,31 @@ results = indexer.get_top_n(tokens, n=3)
 for doc, score in results:
     print(f'[{score:.3f}] {doc.title}: {doc.original_text[:50]}')
 "
+
+
+خوارزمية ال embedding
+# ── تثبيت المكتبات الجديدة ──
+pip install sentence-transformers faiss-cpu
+
+# ── تشغيل اختبارات Embedding فقط ──
+python -m pytest services/indexing/tests/test_embedding_indexer.py -v
+
+# ── تشغيل كل اختبارات المشروع ──
+python -m pytest services/ -v
+
+# ── تجربة بناء الفهرس يدوياً (يحتاج internet لتحميل النموذج) ──
+python -c "
+import sys; sys.path.insert(0, '.')
+from services.indexing.embedding_indexer import EmbeddingIndexer
+
+indexer = EmbeddingIndexer()
+indexer.build_index('dataset1')
+indexer.save_index('dataset1')
+print('Stats:', indexer.get_stats())
+
+# بحث مباشر
+q = indexer.encode_query('cloud storage sync files')
+results = indexer.get_top_k(q, k=3)
+for doc, score in results:
+    print(f'[{score:.3f}] {doc.title}: {doc.original_text[:50]}')
+"
