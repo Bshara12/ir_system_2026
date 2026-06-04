@@ -140,3 +140,59 @@ print('Boolean AND:', idx.search_and(['cloud', 'storag']))
 print('Boolean OR:', idx.search_or(['cloud', 'ai']))
 print('Top terms:', idx.get_top_terms_by_df(5))
 "
+لتحميل الداتا بيز
+
+pip install ir-datasets
+
+pip install sentence-transformers faiss-cpu rank-bm25
+
+python -c "
+import sys
+sys.path.insert(0, '.')
+from services.indexing.ir_datasets_adapter import IrDatasetsAdapter
+
+adapter = IrDatasetsAdapter()
+
+print('جاري تنزيل trec-covid (~220 MB)...')
+print('قد يستغرق 2-5 دقائق...')
+
+paths = adapter.save_to_jsonl(
+    'trec-covid',
+    output_dir='data/datasets/trec-covid',
+    save_queries=True,
+    save_qrels=True,
+)
+
+print('اكتمل التنزيل!')
+print('الملفات المحفوظة:')
+for k, v in paths.items():
+    print(f'  {k}: {v}')
+"
+
+للتحقق من النجاح
+python -c "
+import sys
+sys.path.insert(0, '.')
+from services.indexing.dataset_loader import DatasetLoader
+
+loader = DatasetLoader()
+
+# تحقق من trec-covid
+print('=== trec-covid ===')
+info = loader.get_dataset_info('trec-covid')
+print(info)
+
+# اقرأ أول 3 وثائق
+docs = loader.load_all('trec-covid', max_docs=3)
+for doc in docs:
+    print(f'  doc_id={doc.doc_id}, text={doc.text[:60]}...')
+
+# تحقق من الاستعلامات
+queries = loader.load_queries('trec-covid')
+print(f'  عدد الاستعلامات: {len(queries)}')
+print(f'  أول استعلام: {queries[0].text}')
+
+# تحقق من الـ qrels
+qrels = loader.load_qrels('trec-covid')
+print(f'  عدد الـ qrels: {len(qrels)}')
+"
