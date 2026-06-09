@@ -68,3 +68,10 @@ htmlcov/
 # ===========================
 Thumbs.db
 Desktop.ini
+data/datasets/
+data/indexes/
+data/query_history/
+STEP2_*.md
+requirements_clean.txt
+__pycache__/
+*.pyc

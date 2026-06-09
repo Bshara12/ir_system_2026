@@ -47,6 +47,7 @@ class DatasetName(str, Enum):
     """مجموعات البيانات المدعومة."""
     DATASET_1 = "dataset1"   # مجموعة البيانات الأولى
     DATASET_2 = "dataset2"   # مجموعة البيانات الثانية
+    TREC_COVID = "trec-covid"   # مجموعة بيانات TREC-COVID
 
 
 class Language(str, Enum):
@@ -240,6 +241,48 @@ class EvaluationRequest(BaseModel):
     model: RetrievalModel
     top_k: int = Field(default=DEFAULT_TOP_K, ge=1, le=MAX_TOP_K)
     with_refinement: bool = Field(default=False)
+
+
+class DatasetEvaluationRequest(BaseModel):
+    """
+    طلب تقييم مجموعة بيانات حقيقي باستخدام استرجاع الخدمة.
+    """
+    dataset_name: DatasetName = Field(..., alias="dataset_name")
+    model: RetrievalModel
+    top_k: int = Field(default=DEFAULT_TOP_K, ge=1, le=MAX_TOP_K)
+    max_queries: int = Field(default=5, ge=1)
+    bm25_k1: float = Field(default=BM25_DEFAULT_K1, ge=0.0, le=3.0)
+    bm25_b: float = Field(default=BM25_DEFAULT_B, ge=0.0, le=1.0)
+    apply_refinement: bool = Field(default=False)
+
+
+class PerQueryEvaluation(BaseModel):
+    query_id: str
+    query: str
+    retrieved_doc_ids: List[str]
+    num_relevant: int
+    precision_at_k: float
+    recall_at_k: float
+    average_precision_at_k: float
+    ndcg_at_k: float
+
+
+class DatasetEvaluationMetrics(BaseModel):
+    MAP: float
+    mean_precision_at_k: float
+    mean_recall_at_k: float
+    mean_ndcg_at_k: float
+
+
+class DatasetEvaluationResponse(BaseModel):
+    dataset_name: DatasetName
+    model: RetrievalModel
+    top_k: int
+    max_queries: int
+    evaluated_queries: int
+    metrics: DatasetEvaluationMetrics
+    per_query: List[PerQueryEvaluation]
+    notes: str
 
 
 class EvaluationMetrics(BaseModel):
