@@ -48,6 +48,16 @@ sys.path.insert(
 )
 
 from shared.models import DocumentResult, DatasetName
+
+# نحاول استيراد DocumentStore من المطور الأول
+# إذا لم يكن متاحاً بعد (لم يُدمج) نستمر بدونه
+try:
+    from services.indexing.document_store import get_document_store
+
+    _DOCUMENT_STORE_AVAILABLE = True
+except ImportError:
+    _DOCUMENT_STORE_AVAILABLE = False
+    get_document_store = None
 from services.indexing.tfidf_indexer import get_tfidf_indexer, TFIDFIndexer
 
 logger = logging.getLogger(__name__)
@@ -63,6 +73,9 @@ class TFIDFRetriever:
 
     def __init__(self, dataset: DatasetName) -> None:
         self.dataset = dataset
+        # DocumentStore من المطور الأول — يُوفّر النص الكامل بسرعة O(log N)
+        # يُحمَّل عند أول استخدام (Lazy) لأنه قد لا يكون جاهزاً بعد
+        self._store = None
         # نستخدم Singleton من المطور الأول — يحمّل الفهرس إذا كان موجوداً
         self._indexer: TFIDFIndexer = get_tfidf_indexer(dataset.value)
 
@@ -118,9 +131,8 @@ class TFIDFRetriever:
         for rank, idx in enumerate(top_indices, start=1):
             score = float(scores[idx])
             if score <= 0.0:
-                break  # بعد هذا النقطة كل الدرجات صفر
+                break
 
-            # get_document_by_index() من المطور الأول تُرجع IndexedDocument
             doc = self._indexer.get_document_by_index(int(idx))
             if doc is None:
                 continue
@@ -129,13 +141,44 @@ class TFIDFRetriever:
                 DocumentResult(
                     doc_id=doc.doc_id,
                     title=doc.title,
-                    text=doc.original_text,
+                    text=self._get_full_text(doc.doc_id, doc.original_text),
                     score=score,
                     rank=rank,
                 )
             )
 
         return results
+
+    def _get_full_text(self, doc_id: str, fallback_text: str) -> str:
+        """
+        يجلب النص الكامل من DocumentStore إذا كان متاحاً.
+
+        لماذا هذا مهم؟
+        ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        IndexedDocument.original_text قد يكون مقطوعاً أو ناقصاً
+        لأن بعض الفهارس لا تحفظ النص كاملاً لتوفير الذاكرة.
+
+        DocumentStore (المطور الأول) يحفظ النص الأصلي الكامل
+        في SQLite بسرعة O(log N) للوصول بالـ doc_id.
+
+        إذا DocumentStore غير متاح (لم يُدمج بعد):
+            نستخدم fallback_text من IndexedDocument مباشرة.
+            النظام يعمل — فقط النص قد يكون مختصراً.
+        """
+        if not _DOCUMENT_STORE_AVAILABLE or get_document_store is None:
+            return fallback_text
+
+        try:
+            # تحميل الـ store عند أول استخدام (Lazy Loading)
+            if self._store is None:
+                self._store = get_document_store(self.dataset.value)
+            stored = self._store.get(doc_id)
+            if stored and stored.get("raw_text"):
+                return stored["raw_text"]
+        except Exception:
+            pass  # أي خطأ → نستخدم الـ fallback
+
+        return fallback_text
 
     def get_stats(self) -> dict:
         """إحصائيات الفهرس للـ /health endpoint."""

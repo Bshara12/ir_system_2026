@@ -38,6 +38,16 @@ sys.path.insert(
 )
 
 from shared.models import DocumentResult, DatasetName
+
+# نحاول استيراد DocumentStore من المطور الأول
+# إذا لم يكن متاحاً بعد (لم يُدمج) نستمر بدونه
+try:
+    from services.indexing.document_store import get_document_store
+
+    _DOCUMENT_STORE_AVAILABLE = True
+except ImportError:
+    _DOCUMENT_STORE_AVAILABLE = False
+    get_document_store = None
 from shared.constants import BM25_DEFAULT_K1, BM25_DEFAULT_B
 from services.indexing.bm25_indexer import get_bm25_indexer, BM25Indexer
 
@@ -57,6 +67,9 @@ class BM25Retriever:
 
     def __init__(self, dataset: DatasetName) -> None:
         self.dataset = dataset
+        # DocumentStore من المطور الأول — يُوفّر النص الكامل بسرعة O(log N)
+        # يُحمَّل عند أول استخدام (Lazy) لأنه قد لا يكون جاهزاً بعد
+        self._store = None
         self._indexer: BM25Indexer = get_bm25_indexer(dataset.value)
 
     @property
@@ -125,13 +138,30 @@ class BM25Retriever:
                 DocumentResult(
                     doc_id=doc.doc_id,
                     title=doc.title,
-                    text=doc.original_text,
+                    text=self._get_full_text(doc.doc_id, doc.original_text),
                     score=score,
                     rank=rank,
                 )
             )
 
         return results
+
+    def _get_full_text(self, doc_id: str, fallback_text: str) -> str:
+        """
+        يجلب النص الكامل من DocumentStore إذا كان متاحاً.
+        إذا لم يكن متاحاً → يُرجع النص الاحتياطي من IndexedDocument.
+        """
+        if not _DOCUMENT_STORE_AVAILABLE or get_document_store is None:
+            return fallback_text
+        try:
+            if self._store is None:
+                self._store = get_document_store(self.dataset.value)
+            stored = self._store.get(doc_id)
+            if stored and stored.get("raw_text"):
+                return stored["raw_text"]
+        except Exception:
+            pass
+        return fallback_text
 
     def get_stats(self) -> dict:
         if not self.is_loaded:
