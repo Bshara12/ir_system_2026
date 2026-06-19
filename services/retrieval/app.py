@@ -131,16 +131,27 @@ app.add_middleware(
 # =============================================================
 
 
+def _basic_tokenize(text: str) -> list:
+    """
+    Tokenization بسيط يُستخدم كـ Fallback عند غياب Preprocessing Service.
+
+    أفضل من split() العادي لأنه:
+    - يُحوّل لأحرف صغيرة
+    - يحذف علامات الترقيم
+    - يحذف الكلمات القصيرة جداً
+    """
+    import re
+
+    cleaned = re.sub(r"[^a-zA-Z\s]", " ", text.lower())
+    tokens = [t for t in cleaned.split() if len(t) >= 3]
+    return tokens if tokens else text.lower().split()
+
+
 async def _preprocess_query(query: str) -> list:
     """
     يُرسل الاستعلام لـ Preprocessing Service ويُرجع tokens.
 
-    لماذا نستدعي خدمة خارجية بدل معالجة النص هنا مباشرة؟
-    لأن المطور الأول بنى الفهرس باستخدام Preprocessing Service بإعدادات محددة.
-    يجب أن نُطابق تلك الإعدادات بالضبط.
-    استدعاء نفس الخدمة يضمن التطابق 100%.
-
-    إذا الخدمة غير متاحة: نستخدم split() بسيط كـ fallback.
+    إذا الخدمة غير متاحة: نستخدم _basic_tokenize() كـ Fallback ذكي.
     """
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
@@ -149,13 +160,17 @@ async def _preprocess_query(query: str) -> list:
                 json={"text": query},
             )
             resp.raise_for_status()
-            return resp.json().get("tokens", query.lower().split())
+            tokens = resp.json().get("tokens", [])
+            return tokens if tokens else _basic_tokenize(query)
     except httpx.ConnectError:
-        logger.warning("[Retrieval] Preprocessing Service غير متاح، نستخدم split()")
-        return query.lower().split()
+        logger.warning(
+            "[Retrieval] Preprocessing Service غير متاح (port 8001). "
+            "نستخدم basic tokenization كـ fallback."
+        )
+        return _basic_tokenize(query)
     except Exception as e:
         logger.error(f"[Retrieval] خطأ في Preprocessing: {e}")
-        return query.lower().split()
+        return _basic_tokenize(query)
 
 
 async def _refine_query(query: str) -> str:
