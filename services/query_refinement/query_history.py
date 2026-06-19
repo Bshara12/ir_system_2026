@@ -292,6 +292,59 @@ class QueryHistory:
     # دوال مساعدة خاصة للتخزين
     # ─────────────────────────────────────────────────────────
 
+    def cleanup_old_sessions(self, max_files: int = 500) -> int:
+        """
+        يحذف ملفات الجلسات القديمة إذا تجاوز عددها الحد الأقصى.
+
+        لماذا نحتاج هذا؟
+        ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        مع مرور الوقت واستخدام النظام، يتراكم آلاف ملفات JSON
+        في مجلد data/query_history/ (ملف لكل جلسة).
+        هذا يملأ القرص الصلب تدريجياً!
+
+        الحل: نحتفظ بأحدث max_files ملف فقط.
+        الأقدم يُحذف تلقائياً (FIFO: الأقدم يخرج أولاً).
+
+        المعاملات:
+            max_files: أقصى عدد ملفات مسموح به (افتراضي 500)
+
+        الإرجاع:
+            عدد الملفات التي حُذفت
+
+        مثال:
+            لو عندنا 600 ملف و max_files=500 → نحذف 100 ملف قديم
+        """
+        try:
+            # نجمع كل ملفات JSON مع تاريخ آخر تعديل
+            json_files = sorted(
+                self.history_dir.glob("*.json"),
+                key=lambda f: f.stat().st_mtime,  # نرتب حسب تاريخ التعديل
+                reverse=False,  # الأقدم أولاً
+            )
+
+            deleted = 0
+            if len(json_files) > max_files:
+                files_to_delete = json_files[: len(json_files) - max_files]
+                for f in files_to_delete:
+                    f.unlink()
+                    deleted += 1
+                logger.info(
+                    f"[QueryHistory] Cleanup: حذف {deleted} ملف قديم "
+                    f"(تبقّى {len(json_files) - deleted})"
+                )
+            return deleted
+
+        except Exception as e:
+            logger.error(f"[QueryHistory] خطأ في Cleanup: {e}")
+            return 0
+
+    def get_session_count(self) -> int:
+        """يُرجع عدد الجلسات المحفوظة حالياً. مفيد للـ /health endpoint."""
+        try:
+            return len(list(self.history_dir.glob("*.json")))
+        except Exception:
+            return 0
+
     def _get_session_file(self, session_id: str) -> Path:
         """يُرجع مسار ملف JSON للجلسة."""
         # نُنظّف session_id من أي أحرف غير آمنة

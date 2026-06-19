@@ -150,15 +150,64 @@ class HistoryResponse(BaseModel):
 # =============================================================
 
 
+def _ensure_nltk_data() -> None:
+    """
+    يتحقق من وجود بيانات NLTK ويحمّلها إذا لم تكن موجودة.
+
+    لماذا نفعل هذا هنا؟
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    SynonymExpander يستخدم NLTK WordNet.
+    WordNet يحتاج ملفات بيانات تُحمَّل مرة واحدة وتُحفَظ على الجهاز.
+    لو الجهاز جديد ولم يُشغَّل nltk.download من قبل، الخدمة ستفشل بصمت.
+
+    الحل: نتحقق عند كل بدء تشغيل، ونحمّل إذا لزم.
+    التحميل يحدث مرة واحدة فقط — المرات التالية "already downloaded".
+
+    الموارد المطلوبة:
+        wordnet  ← قاموس WordNet الرئيسي (المرادفات)
+        omw-1.4  ← Open Multilingual Wordnet (دعم لغات إضافية)
+    """
+    try:
+        import nltk
+
+        for resource in ["wordnet", "omw-1.4"]:
+            try:
+                nltk.data.find(f"corpora/{resource}")
+                logger.info(f"[QueryRefinement] NLTK {resource}: موجود ✅")
+            except LookupError:
+                logger.info(f"[QueryRefinement] NLTK {resource}: جاري التحميل...")
+                nltk.download(resource, quiet=True)
+                logger.info(f"[QueryRefinement] NLTK {resource}: تم التحميل ✅")
+    except ImportError:
+        logger.warning("[QueryRefinement] NLTK غير مثبّت — pip install nltk")
+    except Exception as e:
+        logger.error(f"[QueryRefinement] خطأ في تحميل NLTK: {e}")
+
+
 @asynccontextmanager
 async def lifespan(app_instance: FastAPI):
     """يُهيّئ كل مكونات Query Refinement مرة واحدة عند البدء."""
     logger.info("[QueryRefinement] تهيئة المكونات...")
+
+    # الخطوة 1: تأكد من وجود بيانات NLTK قبل أي شيء
+    _ensure_nltk_data()
+
+    # الخطوة 2: تهيئة المكونات
     get_spell_corrector()
     get_synonym_expander()
-    get_query_history()
+    history = get_query_history()
     get_suggestion_engine()
-    logger.info("[QueryRefinement] ✅ جميع المكونات جاهزة")
+
+    # الخطوة 3: تنظيف الملفات القديمة عند كل بدء تشغيل
+    # نحتفظ بأحدث 500 جلسة فقط لمنع امتلاء القرص
+    deleted = history.cleanup_old_sessions(max_files=500)
+    if deleted > 0:
+        logger.info(f"[QueryRefinement] Cleanup: حُذف {deleted} ملف قديم")
+
+    logger.info(
+        f"[QueryRefinement] ✅ جميع المكونات جاهزة "
+        f"(جلسات محفوظة: {history.get_session_count()})"
+    )
     yield
     logger.info("[QueryRefinement] إيقاف الخدمة...")
 
@@ -204,13 +253,18 @@ async def health_check() -> ServiceStatus:
     corrector = get_spell_corrector()
     expander = get_synonym_expander()
 
+    history = get_query_history()
+
     return ServiceStatus(
         service_name="query_refinement",
         status="healthy",
         details={
             "spell_corrector": {"available": corrector.is_available},
             "synonym_expander": {"available": expander.is_available},
-            "query_history": {"available": True},
+            "query_history": {
+                "available": True,
+                "sessions_stored": history.get_session_count(),
+            },
             "suggestion_engine": {"available": True},
         },
     )
