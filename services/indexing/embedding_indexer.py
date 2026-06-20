@@ -176,6 +176,21 @@ class EmbeddingIndexer:
             indexes_dir   : مجلد الفهارس
             dataset_loader: DatasetLoader (Dependency Injection للاختبارات)
             model_name    : اسم نموذج SentenceTransformer
+            
+            
+            شو هو SentenceTransformer؟
+
+هو نموذج ذكاء اصطناعي جاهز لتحويل النص إلى أرقام.
+
+يعني بدل ما يكون عندك:
+
+"I love machine learning"
+
+بيحولها إلى متجه (Vector):
+
+[0.12, -0.55, 0.81, 0.04, ...]
+
+مثلاً 384 رقم.
         """
         self.indexes_dir = Path(indexes_dir)
         self._loader     = dataset_loader or get_dataset_loader()
