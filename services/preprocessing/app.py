@@ -116,7 +116,8 @@ async def preprocess_text(
     # Pydantic تحققت من صحة البيانات قبل وصولنا هنا
     tokens, steps = preprocessor.process(
         text=request.text,
-        language=request.language.value,
+        language=request.language,
+        # language=request.language.value,
         lowercase=request.lowercase,
         remove_punctuation=request.remove_punctuation,
         remove_stopwords=request.remove_stopwords,
@@ -155,7 +156,8 @@ async def preprocess_batch(
     """
     batch_results = preprocessor.process_batch(
         texts=request.texts,
-        language=request.language.value,
+        language=request.language,
+        # language=request.language.value,
         lowercase=request.lowercase,
         remove_punctuation=request.remove_punctuation,
         remove_stopwords=request.remove_stopwords,
