@@ -29,7 +29,7 @@ from shared.models import (
     DocumentResult,
     RetrievalResponse,
 )
-
+from ui.pages.clustering import main as clustering_page
 
 # =============================================================
 # إعدادات Streamlit
@@ -114,17 +114,17 @@ def get_gateway_url() -> str:
 def check_services_health(gateway_url: str) -> Optional[List[ServiceStatus]]:
     """
     التحقق من صحة الخدمات عن طريق استدعاء Gateway.
-    
+
     Args:
         gateway_url: عنوان الـ Gateway
-    
+
     Returns:
         قائمة بحالات الخدمات أو None في حالة الفشل
     """
     try:
         with httpx.Client(timeout=5.0) as client:
             response = client.get(f"{gateway_url}/services/health")
-            
+
         if response.status_code == 200:
             data = response.json()
             # تحويل البيانات إلى نماذج ServiceStatus
@@ -133,7 +133,7 @@ def check_services_health(gateway_url: str) -> Optional[List[ServiceStatus]]:
         else:
             st.error(f"❌ خطأ من Gateway: {response.status_code}")
             return None
-            
+
     except httpx.ConnectError:
         st.error(f"❌ لا يمكن الوصول إلى Gateway على {gateway_url}")
         return None
@@ -157,7 +157,7 @@ def perform_search(
 ) -> Optional[RetrievalResponse]:
     """
     إجراء عملية البحث عن طريق استدعاء Gateway.
-    
+
     Args:
         query: نص الاستعلام
         gateway_url: عنوان Gateway
@@ -167,7 +167,7 @@ def perform_search(
         bm25_k1: معامل BM25 k1
         bm25_b: معامل BM25 b
         apply_refinement: هل يتم تطبيق تحسين الاستعلام
-    
+
     Returns:
         نتائج البحث أو None في حالة الفشل
     """
@@ -181,13 +181,13 @@ def perform_search(
             "bm25_b": bm25_b,
             "apply_refinement": apply_refinement,
         }
-        
+
         with httpx.Client(timeout=15.0) as client:
             response = client.post(
                 f"{gateway_url}/search",
                 json=payload,
             )
-        
+
         if response.status_code == 200:
             data = response.json()
             return RetrievalResponse(**data)
@@ -195,7 +195,7 @@ def perform_search(
             error_msg = response.json().get("detail", "Unknown error")
             st.error(f"❌ خطأ في البحث: {error_msg}")
             return None
-            
+
     except httpx.ConnectError:
         st.error(f"❌ لا يمكن الوصول إلى Gateway على {gateway_url}")
         return None
@@ -211,7 +211,7 @@ def display_result_card(result: DocumentResult, index: int):
     """عرض بطاقة نتيجة واحدة."""
     with st.container():
         col1, col2 = st.columns([3, 1])
-        
+
         with col1:
             # العنوان والـ doc_id
             title_text = result.title if result.title else f"Document {result.doc_id}"
@@ -219,7 +219,7 @@ def display_result_card(result: DocumentResult, index: int):
                 f"<div class='result-title'>#{result.rank} - {title_text}</div>",
                 unsafe_allow_html=True,
             )
-            
+
             # البيانات الوصفية
             st.markdown(
                 f"""
@@ -230,13 +230,13 @@ def display_result_card(result: DocumentResult, index: int):
                 """,
                 unsafe_allow_html=True,
             )
-            
+
             # النص (مقتطف أول 300 حرف)
             text_snippet = result.text[:300]
             if len(result.text) > 300:
                 text_snippet += "..."
             st.text(text_snippet)
-        
+
         with col2:
             st.metric("Score", f"{result.score:.4f}")
 
@@ -323,14 +323,18 @@ if st.sidebar.button("🏥 فحص صحة الخدمات", use_container_width=Tr
     st.sidebar.markdown("---")
     with st.spinner("🔄 جاري الفحص..."):
         services = check_services_health(gateway_url)
-    
+
     if services:
         st.sidebar.markdown("**حالة الخدمات:**")
         for service in services:
             status_icon = "✅" if service.status == "healthy" else "❌"
-            status_class = "health-status-healthy" if service.status == "healthy" else "health-status-unhealthy"
+            status_class = (
+                "health-status-healthy"
+                if service.status == "healthy"
+                else "health-status-unhealthy"
+            )
             status_text = "سليمة" if service.status == "healthy" else "معطلة"
-            
+
             st.sidebar.markdown(
                 f"{status_icon} **{service.service_name}**: <span class='{status_class}'>{status_text}</span>",
                 unsafe_allow_html=True,
@@ -344,9 +348,7 @@ if st.sidebar.button("🏥 فحص صحة الخدمات", use_container_width=Tr
 
 # العنوان الرئيسي
 st.title("🔍 IR Search Engine 2026")
-st.markdown(
-    "محرك بحث استرجاع المعلومات - نظام بحث متقدم مع نماذج متعددة الاسترجاع"
-)
+st.markdown("محرك بحث استرجاع المعلومات - نظام بحث متقدم مع نماذج متعددة الاسترجاع")
 
 st.markdown("---")
 
@@ -387,7 +389,7 @@ if search_button:
                 bm25_b=bm25_b,
                 apply_refinement=apply_refinement,
             )
-        
+
         if response:
             # حفظ النتائج في Session State لعرضها حتى لو كان هناك تحديث آخر
             st.session_state.last_response = response
@@ -396,44 +398,42 @@ if search_button:
 # عرض النتائج إذا كانت موجودة
 if st.session_state.get("show_results", False) and "last_response" in st.session_state:
     response = st.session_state.last_response
-    
+
     st.markdown("---")
-    
+
     # معلومات البحث
     st.subheader("📊 نتائج البحث")
-    
+
     # إحصائيات البحث
     col1, col2, col3, col4, col5 = st.columns(5)
-    
+
     with col1:
         st.metric("نموذج البحث", response.model_used.value)
-    
+
     with col2:
         st.metric("مجموعة البيانات", response.dataset.value)
-    
+
     with col3:
         st.metric("عدد النتائج", response.total_results)
-    
+
     with col4:
         st.metric("وقت المعالجة", f"{response.processing_time_ms:.2f} ms")
-    
+
     with col5:
         st.metric("عدد النتائج المعروضة", len(response.results))
-    
+
     st.markdown("---")
-    
+
     # الاستعلام المحسّن (إذا تم تطبيقه)
     if response.refined_query and response.refined_query != response.query:
-        st.info(
-            f"✨ **الاستعلام بعد التحسين:** {response.refined_query}"
-        )
-    
+        st.info(f"✨ **الاستعلام بعد التحسين:** {response.refined_query}")
+
     st.markdown("---")
-    
+
     # عرض النتائج
     if response.results:
         st.subheader(f"📄 النتائج ({len(response.results)} نتيجة)")
-        
+
         for idx, result in enumerate(response.results, 1):
             display_result_card(result, idx)
             if idx < len(response.results):
@@ -478,7 +478,7 @@ if eval_button:
         try:
             with httpx.Client(timeout=10.0) as client:
                 response = client.post(f"{gateway_url}/evaluate/demo")
-            
+
             if response.status_code == 200:
                 eval_data = response.json()
                 st.session_state.eval_results = eval_data
@@ -491,45 +491,48 @@ if eval_button:
             st.error(f"❌ خطأ: {str(e)}")
 
 # عرض نتائج التقييم إذا كانت موجودة
-if st.session_state.get("show_eval_results", False) and "eval_results" in st.session_state:
+if (
+    st.session_state.get("show_eval_results", False)
+    and "eval_results" in st.session_state
+):
     eval_data = st.session_state.eval_results
-    
+
     st.markdown("---")
-    
+
     # عرض المقاييس الرئيسية
     st.subheader("🎯 المقاييس الرئيسية")
-    
+
     metric_col1, metric_col2, metric_col3, metric_col4 = st.columns(4)
-    
+
     with metric_col1:
         st.metric("Precision@K", f"{eval_data.get('precision_at_k', 0):.4f}")
-    
+
     with metric_col2:
         st.metric("Recall@K", f"{eval_data.get('recall_at_k', 0):.4f}")
-    
+
     with metric_col3:
         st.metric("AP@K", f"{eval_data.get('average_precision_at_k', 0):.4f}")
-    
+
     with metric_col4:
         st.metric("nDCG@K", f"{eval_data.get('ndcg_at_k', 0):.4f}")
-    
+
     st.markdown("---")
-    
+
     # عرض البيانات التجريبية
     with st.expander("📋 بيانات التقييم التجريبية", expanded=False):
         col1, col2 = st.columns(2)
-        
+
         with col1:
             st.write("**المستردة (Retrieved):**")
             st.code(str(eval_data.get("retrieved", [])), language="python")
-            
+
             st.write("**ذات الصلة (Relevant):**")
             st.code(str(eval_data.get("relevant", [])), language="python")
-        
+
         with col2:
             st.write("**درجات الصلة (Qrels):**")
             st.json(eval_data.get("qrels", {}))
-            
+
             st.write(f"**Top-K:** {eval_data.get('k', 5)}")
 
 st.markdown("---")
@@ -546,7 +549,11 @@ st.info(
 real_dataset = st.selectbox(
     "📚 Dataset for evaluation",
     options=dataset_options,
-    index=dataset_options.index(selected_dataset) if selected_dataset in dataset_options else 0,
+    index=(
+        dataset_options.index(selected_dataset)
+        if selected_dataset in dataset_options
+        else 0
+    ),
 )
 
 real_model = st.selectbox(
@@ -624,7 +631,10 @@ if real_eval_button:
         except Exception as e:
             st.error(f"❌ خطأ: {str(e)}")
 
-if st.session_state.get("show_real_eval_results", False) and "real_eval_results" in st.session_state:
+if (
+    st.session_state.get("show_real_eval_results", False)
+    and "real_eval_results" in st.session_state
+):
     real_eval_data = st.session_state.real_eval_results
     st.markdown("---")
     st.subheader("📈 Real Evaluation Results")
@@ -640,19 +650,28 @@ if st.session_state.get("show_real_eval_results", False) and "real_eval_results"
     with col1:
         st.metric("MAP", f"{real_eval_data.get('metrics', {}).get('MAP', 0.0):.4f}")
     with col2:
-        st.metric("Precision@K", f"{real_eval_data.get('metrics', {}).get('mean_precision_at_k', 0.0):.4f}")
+        st.metric(
+            "Precision@K",
+            f"{real_eval_data.get('metrics', {}).get('mean_precision_at_k', 0.0):.4f}",
+        )
     with col3:
-        st.metric("Recall@K", f"{real_eval_data.get('metrics', {}).get('mean_recall_at_k', 0.0):.4f}")
+        st.metric(
+            "Recall@K",
+            f"{real_eval_data.get('metrics', {}).get('mean_recall_at_k', 0.0):.4f}",
+        )
     with col4:
-        st.metric("nDCG@K", f"{real_eval_data.get('metrics', {}).get('mean_ndcg_at_k', 0.0):.4f}")
+        st.metric(
+            "nDCG@K",
+            f"{real_eval_data.get('metrics', {}).get('mean_ndcg_at_k', 0.0):.4f}",
+        )
 
     st.markdown("---")
     st.write(f"**Notes:** {real_eval_data.get('notes', '')}")
     st.markdown("---")
 
-    if real_eval_data.get('per_query'):
+    if real_eval_data.get("per_query"):
         st.subheader("📑 Per-query results")
-        st.table(real_eval_data['per_query'])
+        st.table(real_eval_data["per_query"])
 
 st.markdown("---")
 

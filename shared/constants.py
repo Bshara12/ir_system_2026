@@ -21,7 +21,7 @@ RETRIEVAL_PORT          = 8003  # خدمة الاسترجاع
 QUERY_REFINEMENT_PORT   = 8004  # خدمة تحسين الاستعلامات
 EVALUATION_PORT         = 8005  # خدمة التقييم والترتيب
 UI_PORT                 = 8501  # واجهة Streamlit
-
+CLUSTERING_PORT         = 8006  # خدمة التجميع
 
 # =============================================================
 # عناوين الخدمات الداخلية (Internal Service URLs)
@@ -35,6 +35,7 @@ INDEXING_URL            = f"{BASE_HOST}:{INDEXING_PORT}"
 RETRIEVAL_URL           = f"{BASE_HOST}:{RETRIEVAL_PORT}"
 QUERY_REFINEMENT_URL    = f"{BASE_HOST}:{QUERY_REFINEMENT_PORT}"
 EVALUATION_URL          = f"{BASE_HOST}:{EVALUATION_PORT}"
+CLUSTERING_URL          = f"{BASE_HOST}:{CLUSTERING_PORT}"
 
 
 # =============================================================
