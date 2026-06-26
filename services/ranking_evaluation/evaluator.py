@@ -211,6 +211,22 @@ async def evaluate_dataset(
 	mean_precision = sum(item["precision_at_k"] for item in per_query) / num_queries
 	mean_recall = sum(item["recall_at_k"] for item in per_query) / num_queries
 	mean_ndcg = sum(item["ndcg_at_k"] for item in per_query) / num_queries
+	notes = (
+		"Real evaluation uses qrels from the selected dataset and a fixed retrieval model. "
+		"The old trec-covid max_docs=10000 setup was only for local testing; final evaluation "
+		"should use the full quora dataset or another complete manageable dataset with qrels."
+	)
+	result_summary = [{
+		"dataset": dataset_value,
+		"model": model_value,
+		"top_k": top_k,
+		"max_queries": max_queries,
+		"MAP": map_score,
+		"Precision@K": mean_precision,
+		"Recall@K": mean_recall,
+		"nDCG@K": mean_ndcg,
+		"notes": notes,
+	}]
 
 	return {
 		"dataset_name": dataset_value,
@@ -224,12 +240,9 @@ async def evaluate_dataset(
 			"mean_recall_at_k": mean_recall,
 			"mean_ndcg_at_k": mean_ndcg,
 		},
+		"result_summary": result_summary,
 		"per_query": per_query,
-		"notes": (
-			"Evaluation uses existing built index. "
-			"If the index was built with max_docs=10000, qrels may include documents outside "
-			"the indexed subset."
-		),
+		"notes": notes,
 	}
 
 

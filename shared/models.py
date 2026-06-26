@@ -48,6 +48,7 @@ class DatasetName(str, Enum):
     DATASET_1 = "dataset1"   # مجموعة البيانات الأولى
     DATASET_2 = "dataset2"   # مجموعة البيانات الثانية
     TREC_COVID = "trec-covid"   # مجموعة بيانات TREC-COVID
+    QUORA = "quora"   # مجموعة بيانات Quora الكاملة
 
 
 class Language(str, Enum):

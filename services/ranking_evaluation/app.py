@@ -16,7 +16,7 @@ from .evaluator import evaluate_demo, evaluate_dataset
 
 
 class DatasetEvaluationRequest(BaseModel):
-	dataset_name: str = Field(default="trec-covid", description="Dataset folder name under data/datasets")
+	dataset_name: str = Field(default="quora", description="Dataset folder name under data/datasets")
 	model: RetrievalModel = Field(default=RetrievalModel.BM25)
 	top_k: int = Field(default=10, ge=1, le=100)
 	max_queries: int = Field(default=5, ge=1, le=100)

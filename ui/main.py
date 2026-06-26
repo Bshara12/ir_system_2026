@@ -29,7 +29,29 @@ from shared.models import (
     DocumentResult,
     RetrievalResponse,
 )
-from ui.pages.clustering import main as clustering_page
+
+AUTO_AGENT_OPTION = "Auto (Agent)"
+DATASET_OPTIONS = [
+    DatasetName.DATASET_1.value,
+    DatasetName.TREC_COVID.value,
+    DatasetName.QUORA.value,
+]
+SEARCH_MODEL_OPTIONS = [
+    AUTO_AGENT_OPTION,
+    RetrievalModel.TFIDF.value,
+    RetrievalModel.BM25.value,
+    RetrievalModel.EMBEDDING.value,
+    RetrievalModel.HYBRID_PARALLEL.value,
+    RetrievalModel.HYBRID_SERIAL.value,
+]
+EVALUATION_MODEL_OPTIONS = [
+    RetrievalModel.TFIDF.value,
+    RetrievalModel.BM25.value,
+    RetrievalModel.EMBEDDING.value,
+    RetrievalModel.HYBRID_PARALLEL.value,
+    RetrievalModel.HYBRID_SERIAL.value,
+]
+
 
 # =============================================================
 # إعدادات Streamlit
@@ -148,13 +170,13 @@ def check_services_health(gateway_url: str) -> Optional[List[ServiceStatus]]:
 def perform_search(
     query: str,
     gateway_url: str,
-    dataset: DatasetName,
-    model: RetrievalModel,
+    dataset: str,
+    model: str,
     top_k: int,
     bm25_k1: float,
     bm25_b: float,
     apply_refinement: bool,
-) -> Optional[RetrievalResponse]:
+) -> tuple[Optional[RetrievalResponse], Optional[dict]]:
     """
     إجراء عملية البحث عن طريق استدعاء Gateway.
 
@@ -172,39 +194,42 @@ def perform_search(
         نتائج البحث أو None في حالة الفشل
     """
     try:
+        use_agent = model == AUTO_AGENT_OPTION
         payload = {
             "query": query,
-            "dataset": dataset.value,
-            "model": model.value,
+            "dataset": dataset,
             "top_k": top_k,
             "bm25_k1": bm25_k1,
             "bm25_b": bm25_b,
             "apply_refinement": apply_refinement,
         }
-
+        if not use_agent:
+            payload["model"] = model
+        
         with httpx.Client(timeout=15.0) as client:
             response = client.post(
-                f"{gateway_url}/search",
+                f"{gateway_url}/agent/search" if use_agent else f"{gateway_url}/search",
                 json=payload,
             )
 
         if response.status_code == 200:
             data = response.json()
-            return RetrievalResponse(**data)
+            agent_decision = data.pop("agent_decision", None)
+            return RetrievalResponse(**data), agent_decision
         else:
             error_msg = response.json().get("detail", "Unknown error")
             st.error(f"❌ خطأ في البحث: {error_msg}")
-            return None
-
+            return None, None
+            
     except httpx.ConnectError:
         st.error(f"❌ لا يمكن الوصول إلى Gateway على {gateway_url}")
-        return None
+        return None, None
     except httpx.TimeoutException:
         st.error(f"⏱️ انتهت مهلة الاتصال (الطلب بطيء جداً)")
-        return None
+        return None, None
     except Exception as e:
         st.error(f"❌ خطأ: {str(e)}")
-        return None
+        return None, None
 
 
 def display_result_card(result: DocumentResult, index: int):
@@ -259,7 +284,7 @@ gateway_url = st.sidebar.text_input(
 st.sidebar.markdown("---")
 
 # اختيار مجموعة البيانات
-dataset_options = [d.value for d in DatasetName]
+dataset_options = DATASET_OPTIONS
 selected_dataset = st.sidebar.selectbox(
     "📚 مجموعة البيانات",
     options=dataset_options,
@@ -267,10 +292,11 @@ selected_dataset = st.sidebar.selectbox(
 )
 
 # اختيار نموذج الاسترجاع
-model_options = [m.value for m in RetrievalModel]
+search_model_options = SEARCH_MODEL_OPTIONS
+evaluation_model_options = EVALUATION_MODEL_OPTIONS
 selected_model = st.sidebar.selectbox(
     "🤖 نموذج الاسترجاع",
-    options=model_options,
+    options=search_model_options,
     help="اختر نموذج البحث المستخدم",
 )
 
@@ -379,11 +405,11 @@ if search_button:
         st.error("❌ يرجى إدخال نص الاستعلام أولاً")
     else:
         with st.spinner("🔄 جاري البحث... يرجى الانتظار"):
-            response = perform_search(
+            response, agent_decision = perform_search(
                 query=query_input,
                 gateway_url=gateway_url,
-                dataset=DatasetName(selected_dataset),
-                model=RetrievalModel(selected_model),
+                dataset=selected_dataset,
+                model=selected_model,
                 top_k=top_k,
                 bm25_k1=bm25_k1,
                 bm25_b=bm25_b,
@@ -393,6 +419,7 @@ if search_button:
         if response:
             # حفظ النتائج في Session State لعرضها حتى لو كان هناك تحديث آخر
             st.session_state.last_response = response
+            st.session_state.last_agent_decision = agent_decision
             st.session_state.show_results = True
 
 # عرض النتائج إذا كانت موجودة
@@ -426,8 +453,10 @@ if st.session_state.get("show_results", False) and "last_response" in st.session
 
     # الاستعلام المحسّن (إذا تم تطبيقه)
     if response.refined_query and response.refined_query != response.query:
-        st.info(f"✨ **الاستعلام بعد التحسين:** {response.refined_query}")
-
+        st.info(
+            f"✨ **الاستعلام بعد التحسين:** {response.refined_query}"
+        )
+    
     st.markdown("---")
 
     # عرض النتائج
@@ -541,9 +570,12 @@ st.markdown("---")
 # قسم التقييم الحقيقي باستخدام qrels
 st.subheader("📌 Real Dataset Evaluation")
 
-st.info(
-    "⚠️ Real evaluation uses qrels. If the current index was built with max_docs=10000, "
-    "scores may be low because many relevant documents may be outside the indexed subset."
+st.warning(
+    "The old trec-covid max_docs=10000 setup was only for local testing. "
+    "Final evaluation should use the full `quora` dataset or another complete manageable dataset with qrels."
+)
+st.caption(
+    "Auto Agent is used for single-query search only. Real evaluation requires a fixed retrieval model."
 )
 
 real_dataset = st.selectbox(
@@ -558,8 +590,8 @@ real_dataset = st.selectbox(
 
 real_model = st.selectbox(
     "🤖 Evaluation model",
-    options=model_options,
-    index=model_options.index(selected_model) if selected_model in model_options else 0,
+    options=evaluation_model_options,
+    index=evaluation_model_options.index(selected_model) if selected_model in evaluation_model_options else 0,
 )
 
 real_top_k = st.slider(
@@ -669,11 +701,288 @@ if (
     st.write(f"**Notes:** {real_eval_data.get('notes', '')}")
     st.markdown("---")
 
+    metrics = real_eval_data.get("metrics", {})
+    summary_table = [{
+        "dataset": real_eval_data.get("dataset_name", ""),
+        "model": real_eval_data.get("model", ""),
+        "top_k": real_eval_data.get("top_k", 0),
+        "max_queries": real_eval_data.get("max_queries", 0),
+        "MAP": metrics.get("MAP", 0.0),
+        "Precision@K": metrics.get("mean_precision_at_k", 0.0),
+        "Recall@K": metrics.get("mean_recall_at_k", 0.0),
+        "nDCG@K": metrics.get("mean_ndcg_at_k", 0.0),
+        "notes": real_eval_data.get("notes", ""),
+    }]
+    st.subheader("📋 Report summary")
+    st.table(summary_table)
+    st.markdown("---")
+
     if real_eval_data.get("per_query"):
         st.subheader("📑 Per-query results")
         st.table(real_eval_data["per_query"])
 
 st.markdown("---")
+
+
+# =========================================================
+# STANDARD_EVALUATION_REPORT_BLOCK
+# تقرير تقييم ثابت حسب متطلب المشروع
+# =========================================================
+
+if "selected_page" not in globals() or selected_page == "🔍 محرك البحث والتقييم":
+    st.markdown("---")
+    st.subheader("📊 Standard Evaluation Report")
+
+    st.caption(
+        "This benchmark uses the official dataset evaluation queries and qrels. "
+        "Manual search-box queries are not used for evaluation."
+    )
+
+    st.info(
+        "Baseline = بدون Query Refinement. "
+        "With Query Refinement = بعد تطبيق ميزة تحسين الاستعلام. "
+        "Top-K is fixed to 10, so Precision@K is reported as Precision@10."
+    )
+
+    try:
+        import pandas as pd
+        import altair as alt
+
+        standard_dataset_options = globals().get(
+            "DATASET_OPTIONS",
+            globals().get("dataset_options", ["dataset1", "trec-covid", "quora"])
+        )
+
+        if not isinstance(standard_dataset_options, list):
+            standard_dataset_options = list(standard_dataset_options)
+
+        default_standard_dataset_index = (
+            standard_dataset_options.index("quora")
+            if "quora" in standard_dataset_options
+            else 0
+        )
+
+        standard_dataset = st.selectbox(
+            "📚 Dataset for standard benchmark",
+            options=standard_dataset_options,
+            index=default_standard_dataset_index,
+            key="standard_eval_dataset",
+        )
+
+        st.caption(
+            f"Evaluation source: data/datasets/{standard_dataset}/queries.jsonl "
+            f"+ data/datasets/{standard_dataset}/qrels.jsonl"
+        )
+
+        standard_max_queries = st.slider(
+            "🧮 Max official test queries",
+            min_value=5,
+            max_value=100,
+            value=20,
+            step=5,
+            key="standard_eval_max_queries",
+            help="Use the same fixed number of official queries for all models to ensure fair comparison.",
+        )
+
+        col_std_1, col_std_2 = st.columns(2)
+
+        with col_std_1:
+            standard_bm25_k1 = st.slider(
+                "k1 for benchmark BM25",
+                min_value=0.5,
+                max_value=3.0,
+                value=1.5,
+                step=0.1,
+                key="standard_eval_bm25_k1",
+            )
+
+        with col_std_2:
+            standard_bm25_b = st.slider(
+                "b for benchmark BM25",
+                min_value=0.0,
+                max_value=1.0,
+                value=0.75,
+                step=0.05,
+                key="standard_eval_bm25_b",
+            )
+
+        STANDARD_EVAL_MODELS = [
+            "tfidf",
+            "bm25",
+            "embedding",
+            "hybrid_parallel",
+            "hybrid_serial",
+        ]
+
+        st.write("**Models included in this benchmark:**")
+        st.code(", ".join(STANDARD_EVAL_MODELS))
+
+        run_standard_eval = st.button(
+            "▶️ Run Standard Evaluation Benchmark",
+            use_container_width=True,
+            key="run_standard_evaluation_benchmark",
+        )
+
+        if run_standard_eval:
+            rows = []
+            progress_total = len(STANDARD_EVAL_MODELS) * 2
+            progress_done = 0
+            progress_bar = st.progress(0)
+
+            with st.spinner("Running fixed benchmark on official test queries and qrels..."):
+                for model_name in STANDARD_EVAL_MODELS:
+                    for feature_label, refinement_value in [
+                        ("Baseline", False),
+                        ("With Query Refinement", True),
+                    ]:
+                        payload = {
+                            "dataset_name": standard_dataset,
+                            "model": model_name,
+                            "top_k": 10,
+                            "max_queries": standard_max_queries,
+                            "bm25_k1": standard_bm25_k1,
+                            "bm25_b": standard_bm25_b,
+                            "apply_refinement": refinement_value,
+                        }
+
+                        row = {
+                            "Dataset": standard_dataset,
+                            "Model": model_name,
+                            "Feature Setting": feature_label,
+                            "Top-K": 10,
+                            "Max Queries": standard_max_queries,
+                            "MAP": None,
+                            "Precision@10": None,
+                            "Recall@10": None,
+                            "nDCG@10": None,
+                            "Error": "",
+                        }
+
+                        try:
+                            with httpx.Client(timeout=240.0) as client:
+                                resp = client.post(
+                                    f"{gateway_url}/evaluate/dataset",
+                                    json=payload,
+                                )
+
+                            if resp.status_code == 200:
+                                data = resp.json()
+                                metrics = data.get("metrics", {})
+
+                                row["MAP"] = metrics.get("MAP", 0.0)
+                                row["Precision@10"] = metrics.get("mean_precision_at_k", 0.0)
+                                row["Recall@10"] = metrics.get("mean_recall_at_k", 0.0)
+                                row["nDCG@10"] = metrics.get("mean_ndcg_at_k", 0.0)
+                            else:
+                                try:
+                                    err = resp.json().get("detail", resp.text)
+                                except Exception:
+                                    err = resp.text
+                                row["Error"] = f"HTTP {resp.status_code}: {err}"
+
+                        except Exception as e:
+                            row["Error"] = str(e)
+
+                        rows.append(row)
+                        progress_done += 1
+                        progress_bar.progress(progress_done / progress_total)
+
+            report_df = pd.DataFrame(rows)
+            st.session_state.standard_eval_report_df = report_df
+            st.success("✅ Standard evaluation benchmark finished.")
+
+        if "standard_eval_report_df" in st.session_state:
+            report_df = st.session_state.standard_eval_report_df
+
+            st.markdown("---")
+            st.subheader("📋 Fixed Evaluation Table")
+            st.dataframe(report_df, use_container_width=True)
+
+            csv_bytes = report_df.to_csv(index=False).encode("utf-8-sig")
+            st.download_button(
+                "⬇️ Download evaluation table as CSV",
+                data=csv_bytes,
+                file_name=f"standard_evaluation_{standard_dataset}.csv",
+                mime="text/csv",
+                use_container_width=True,
+                key="download_standard_eval_csv",
+            )
+
+            numeric_df = report_df[report_df["Error"].fillna("") == ""].copy()
+
+            if not numeric_df.empty:
+                st.markdown("---")
+                st.subheader("📈 Evaluation Charts")
+
+                for metric_name in ["MAP", "Precision@10", "Recall@10", "nDCG@10"]:
+                    st.write(f"**{metric_name} comparison**")
+
+                    chart_data = numeric_df[
+                        ["Model", "Feature Setting", metric_name]
+                    ].copy()
+
+                    chart_data[metric_name] = pd.to_numeric(
+                        chart_data[metric_name],
+                        errors="coerce",
+                    )
+
+                    chart = (
+                        alt.Chart(chart_data)
+                        .mark_bar()
+                        .encode(
+                            x=alt.X(
+                                "Model:N",
+                                title="Model",
+                                sort=[
+                                    "tfidf",
+                                    "bm25",
+                                    "embedding",
+                                    "hybrid_parallel",
+                                    "hybrid_serial",
+                                ],
+                            ),
+                            xOffset=alt.XOffset(
+                                "Feature Setting:N",
+                                title="Feature Setting",
+                            ),
+                            y=alt.Y(
+                                f"{metric_name}:Q",
+                                title=metric_name,
+                                scale=alt.Scale(domain=[0, 1]),
+                            ),
+                            color=alt.Color(
+                                "Feature Setting:N",
+                                title="Feature Setting",
+                            ),
+                            tooltip=[
+                                alt.Tooltip("Dataset:N"),
+                                alt.Tooltip("Model:N"),
+                                alt.Tooltip("Feature Setting:N"),
+                                alt.Tooltip(f"{metric_name}:Q", format=".4f"),
+                            ],
+                        )
+                        .properties(height=360)
+                    )
+
+                    st.altair_chart(chart, use_container_width=True)
+
+                st.markdown("---")
+                st.subheader("🧠 Interpretation Notes")
+                st.markdown(
+                    """
+                    - **BM25** is expected to perform well when relevant documents share exact terms with the query.
+                    - **TF-IDF** is a strong lexical baseline but may be weaker than BM25 because it does not handle document length and term saturation in the same way.
+                    - **Embedding** can improve semantic matching when the query and document use different words with similar meaning.
+                    - **Hybrid models** should be compared against single models using the same Top-K and the same official queries.
+                    - **Query Refinement** may improve or reduce scores depending on whether the refined query still matches the official qrels.
+                    """
+                )
+            else:
+                st.warning("No successful benchmark rows to chart yet.")
+
+    except Exception as e:
+        st.error(f"❌ Standard Evaluation Report failed: {str(e)}")
+
 
 # Footer
 st.markdown(
