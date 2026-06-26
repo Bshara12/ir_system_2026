@@ -120,6 +120,7 @@ class TFIDFRetriever:
         # الخطوة 3: Cosine Similarity مع كل الوثائق
         # tfidf_matrix شكله (N_docs, vocab_size)
         # النتيجة scores شكلها (N_docs,)
+        # flatten() يحول النتيجة من مصفوفة ثنائية الأبعاد إلى مصفوفة أحادية الأبعاد (قائمة أرقام بسيطة) تحتوي على "درجة التشابه" لكل وثيقة.
         scores = cosine_similarity(query_vec, self._indexer.tfidf_matrix).flatten()
 
         # الخطوة 4: أفضل top_k وثيقة

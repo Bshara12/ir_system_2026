@@ -42,6 +42,7 @@ from contextlib import asynccontextmanager
 import httpx
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from services.indexing.vector_store import get_vector_store
 
 sys.path.insert(
     0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -213,12 +214,47 @@ async def health_check() -> ServiceStatus:
             "tfidf": {"loaded": tfidf.is_loaded, **tfidf.get_stats()},
             "bm25": {"loaded": bm25.is_loaded, **bm25.get_stats()},
             "embedding": {"loaded": emb.is_loaded, **emb.get_stats()},
+            "vector_store": get_vector_store(dataset.value).get_status(),
         }
     return ServiceStatus(
         service_name="retrieval",
         status="healthy",
         details=details,
     )
+
+
+@app.post("/search/semantic-raw", tags=["Retrieval"])
+async def search_semantic_raw(
+    query: str,
+    dataset: DatasetName,
+    top_k: int = 10,
+) -> dict:
+    """
+    بحث دلالي مباشر عبر VectorStore.
+    يُرجع (doc_id, score, text, title) بدون تحويل لـ DocumentResult.
+    """
+    store = get_vector_store(dataset.value)
+
+    if not store.is_ready():
+        raise HTTPException(503, f"VectorStore لـ {dataset.value} غير جاهز")
+
+    results = store.search(query, k=top_k)
+
+    return {
+        "query": query,
+        "dataset": dataset.value,
+        "results": [
+            {
+                "doc_id": doc_id,
+                "score": score,
+                "text": text[:200],
+                "title": title,
+                "rank": rank + 1,
+            }
+            for rank, (doc_id, score, text, title) in enumerate(results)
+        ],
+        "total": len(results),
+    }
 
 
 @app.post(

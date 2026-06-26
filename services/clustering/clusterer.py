@@ -72,6 +72,7 @@ class ClusterInfo:
     doc_ids: List[str]  # معرّفات الوثائق في المجموعة
     centroid_score: float  # متوسط قرب الوثائق من المركز
 
+    # التابع to_dict يستدعي asdict(self) لتحويل الكائن بالكامل ومحتوياته إلى قاموس بايثون تمهيداً لتحويله إلى JSON للواجهة الأمامية
     def to_dict(self) -> Dict:
         return asdict(self)
 
@@ -189,11 +190,17 @@ class DocumentClusterer:
         )
 
         svd = TruncatedSVD(n_components=actual_components, random_state=random_state)
+        # fit (التعلم): تدرس مصفوفة الكلمات tfidf_matrix الضخمة بالكامل لتكتشف العلاقات الخفية بين الكلمات (أي الكلمات تظهر معاً دائماً).
+# transform (التحويل): تطبق ما تعلمته لضغط المصفوفة الضخمة وإرجاع مصفوفة جديدة صغيرة وكثيفة اسمها reduced_matrix (تحتوي على المفاهيم بدلاً من الكلمات الحرفية).
         reduced_matrix = svd.fit_transform(tfidf_matrix)
 
         # ── الخطوة 3: L2 Normalization ────────────────────────
         # K-Means يستخدم Euclidean distance
         # بعد Normalization: Euclidean ≈ Cosine → نتائج أفضل
+
+        # يمرر المصفوفة المضغوطة لدالة normalize مع خيار norm="l2". تقوم هذه الدالة بقسمة كل عنصر في متجه الوثيقة على الجذر التربيعي لمجموع مربعات عناصر المتجه بالكامل.
+        # الهدف: جعل المسافة الإقليدية التي تعتمد عليها خوارزمية KMeans تعطي نتائج مطابقة رياضياً لـ Cosine Similarity.
+        # هذا السطر يقوم بعملية إسقاط هندسي. هو يخبر بايثون: "خذ كل هذه الأسهم (المتجهات) المتباينة في الأطوال، وقم بتمطيط الأسهم القصيرة وضغط الأسهم الطويلة، حتى تصبح جميعها تلامس محيط كرة وهمية نصف قطرها يساوي 1
         reduced_normalized = normalize(reduced_matrix, norm="l2")
 
         # ── الخطوة 4: K-Means ─────────────────────────────────
@@ -309,6 +316,7 @@ class DocumentClusterer:
 
         # استخراج صفوف المصفوفة للوثائق المحددة
         subset_matrix = tfidf_matrix_full[valid_indices]
+        # نقوم بإنشاء قائمة مصغرة تحتوي على كائنات الوثائق (التي تحمل النصوص والعناوين) المقابلة لتلك المؤشرات، لكي نستخدمها عند عرض النتائج
         subset_documents = [documents_full[i] for i in valid_indices]
 
         # تعديل n_clusters إذا لزم
@@ -462,6 +470,7 @@ class DocumentClusterer:
 
             # استخراج أهم الكلمات
             # نأخذ صفوف المصفوفة للوثائق في هذا الـ cluster
+            # نحسب المتوسط الحسابي لقيم الـ $TF-IDF$ لكل كلمة عبر المحور الصِفري (axis=0). الكلمة التي تمتلك أعلى متوسط سكور داخل هذه المجموعة هي الكلمة الأكثر تكراراً وتميزاً وسياقاً هنا.
             cluster_matrix = tfidf_matrix[cluster_indices]
 
             # متوسط TF-IDF لكل كلمة في الـ cluster
@@ -480,6 +489,7 @@ class DocumentClusterer:
 
             # متوسط المسافة من المركز (قرب الوثائق من بعضها)
             if cluster_matrix.shape[0] > 0:
+              # نحسب النقطة المركزية الوهمية (Centroid) للمجموعة، وهي تمثل "المتوسط الرياضي المثالي" لجميع وثائق المجموعة الحالية.
                 centroid = np.asarray(cluster_matrix.mean(axis=0))
                 centroid_score = float(
                     np.mean(

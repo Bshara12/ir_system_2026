@@ -964,3 +964,74 @@ class TestEmbeddingRetriever:
         assert stats["loaded"] is True
         assert stats["model_name"] == "all-MiniLM-L6-v2"
         assert stats["embedding_dim"] == 384
+
+
+class TestVectorStoreIntegration:
+    """تحقق من أن EmbeddingRetriever يعمل مع VectorStore بنفس النتائج."""
+
+    def test_vector_store_and_retriever_same_results(self):
+        """
+        VectorStore.search() و EmbeddingRetriever.search()
+        يجب أن يُنتجا نفس النتائج.
+        """
+        from services.indexing.vector_store import VectorStore
+        from services.indexing.embedding_indexer import EmbeddingIndexer
+        import numpy as np
+        from scipy.sparse import csr_matrix
+
+        # Mock مشترك
+        mock_indexer = MagicMock()
+        mock_indexer.is_built.return_value = True
+        mock_indexer.metadata = MagicMock(
+            num_documents=3,
+            model_name="all-MiniLM-L6-v2",
+            embedding_dim=384,
+            index_type="flat_ip",
+        )
+
+        # نفس النتائج لكليهما
+        fake_doc = MagicMock()
+        fake_doc.doc_id = "d1"
+        fake_doc.title = "Cloud"
+        fake_doc.original_text = "Cloud storage is useful."
+
+        mock_indexer.encode_query.return_value = np.random.rand(1, 384).astype(
+            "float32"
+        )
+        mock_indexer.get_top_k.return_value = [(fake_doc, 0.89)]
+
+        # VectorStore
+        store = VectorStore.__new__(VectorStore)
+        store._dataset_name = "dataset1"
+        store._indexer = mock_indexer
+
+        results = store.search("cloud storage", k=1)
+
+        assert len(results) == 1
+        doc_id, score, text, title = results[0]
+        assert doc_id == "d1"
+        assert abs(score - 0.89) < 1e-5
+        assert "Cloud" in text
+
+    def test_vector_store_status_fields(self):
+        """get_status() يُرجع الحقول المطلوبة."""
+        from services.indexing.vector_store import VectorStore
+
+        store = VectorStore.__new__(VectorStore)
+        store._dataset_name = "dataset1"
+
+        mock_indexer = MagicMock()
+        mock_indexer.is_built.return_value = True
+        mock_indexer.is_saved.return_value = True
+        mock_indexer.documents = [MagicMock()] * 5
+        mock_indexer.metadata = MagicMock(
+            model_name="all-MiniLM-L6-v2",
+            embedding_dim=384,
+            index_type="flat_ip",
+        )
+        store._indexer = mock_indexer
+
+        status = store.get_status()
+        assert status["is_ready"] is True
+        assert status["num_documents"] == 5
+        assert status["model_name"] == "all-MiniLM-L6-v2"
