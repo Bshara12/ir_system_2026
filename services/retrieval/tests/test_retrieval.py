@@ -969,15 +969,37 @@ class TestEmbeddingRetriever:
 class TestVectorStoreIntegration:
     """تحقق من أن EmbeddingRetriever يعمل مع VectorStore بنفس النتائج."""
 
+    def _get_real_vector_store(self):
+        """
+        خدعة برمجية لجلب الكلاس الحقيقي من الملف مباشرة
+        دون الحاجة لملف __init__.py
+        """
+        import importlib.util
+        import sys
+
+        module_name = "services.indexing.vector_store"
+        file_path = "services/indexing/vector_store.py"
+
+        # قراءة الوحدة مباشرة من مسار الملف
+        spec = importlib.util.spec_from_file_location(module_name, file_path)
+        vs_module = importlib.util.module_from_spec(spec)
+
+        # حقنها في الذاكرة لتجنب أخطاء الاستدعاء الداخلي
+        sys.modules[module_name] = vs_module
+        spec.loader.exec_module(vs_module)
+
+        return vs_module.VectorStore
+
     def test_vector_store_and_retriever_same_results(self):
         """
         VectorStore.search() و EmbeddingRetriever.search()
         يجب أن يُنتجا نفس النتائج.
         """
-        from services.indexing.vector_store import VectorStore
-        from services.indexing.embedding_indexer import EmbeddingIndexer
+        from unittest.mock import MagicMock
         import numpy as np
-        from scipy.sparse import csr_matrix
+
+        # استدعاء الكلاس الحقيقي باستخدام دالتنا المساعدة بدلاً من from ... import
+        VectorStore = self._get_real_vector_store()
 
         # Mock مشترك
         mock_indexer = MagicMock()
@@ -1015,7 +1037,10 @@ class TestVectorStoreIntegration:
 
     def test_vector_store_status_fields(self):
         """get_status() يُرجع الحقول المطلوبة."""
-        from services.indexing.vector_store import VectorStore
+        from unittest.mock import MagicMock
+
+        # استدعاء الكلاس الحقيقي باستخدام دالتنا المساعدة
+        VectorStore = self._get_real_vector_store()
 
         store = VectorStore.__new__(VectorStore)
         store._dataset_name = "dataset1"
