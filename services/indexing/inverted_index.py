@@ -257,7 +257,7 @@ class InvertedIndex:
 
         print()
 
-        # ترتيب الـ postings بالـ doc_id (للـ merge السريع)
+        # ترتيب الـ postings بالـ doc_id (للـ merge السريع مثل عمليا الand و الor و غيرها)
         for term in index:
             index[term].sort(key=lambda p: p.doc_id)
 
@@ -309,7 +309,7 @@ class InvertedIndex:
         if not terms:
             return []
 
-        # احصل على مجموعات الـ doc_ids لكل مصطلح
+        # رح تحتوي على مجموعة الدوكيومنت لكل كلمة
         sets = []
         for term in terms:
             postings = self._index.get(term, [])
@@ -319,7 +319,7 @@ class InvertedIndex:
             return []
 
         # تقاطع كل المجموعات (AND)
-        # نبدأ بالأصغر لتحسين الأداء
+        # اخواتي هون منرتب من الاصغر لانو لو مثلا كلمة بشارة موجودة بالف مستند و كلمة حاتم موجودة ب5 فالاحسن نبلش بالاضغر
         sets.sort(key=len)
         result = sets[0]
         for s in sets[1:]:
@@ -340,7 +340,7 @@ class InvertedIndex:
         self._check_built()
         if not terms:
             return []
-
+# هون اخواتي عملنا set لانو الset ما بتسمح بالتكرار
         result: Set[str] = set()
         for term in terms:
             postings = self._index.get(term, [])
@@ -413,6 +413,7 @@ class InvertedIndex:
             (term, len(postings))
             for term, postings in self._index.items()
         ]
+        # ارجاع النتائج مرتبة حسب التكرار و من الاكبر للاصغر
         return sorted(term_dfs, key=lambda x: x[1], reverse=True)[:n]
 
     def get_stats(self) -> Dict:

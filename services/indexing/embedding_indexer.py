@@ -293,6 +293,7 @@ class EmbeddingIndexer:
         print(f"{'='*55}")
         start_time = time.time()
 
+
         # ── الخطوة 1: تحميل الوثائق ──────────────────────────
         print("[EmbeddingIndexer] الخطوة 1/4: تحميل الوثائق...")
         raw_docs = self._loader.load_all(dataset_name, max_docs=max_docs)
@@ -349,7 +350,7 @@ class EmbeddingIndexer:
 
         # ── الخطوة 5: بناء هياكل البيانات ────────────────────
         print("[EmbeddingIndexer] الخطوة 4/4: بناء هياكل البيانات...")
-
+# هي نسخة من الدوكيومنت لانو البحث بيرجع رقم الوثيقة و نحن بدنا نعرف شو هي الوثيقة
         self.documents = [
             IndexedDocument(
                 doc_id=doc.doc_id,
@@ -359,6 +360,7 @@ class EmbeddingIndexer:
             )
             for doc in raw_docs
         ]
+        # خريطة للبحث السريع بتعقيد O(1)
         self.doc_id_to_idx = {
             doc.doc_id: idx for idx, doc in enumerate(self.documents)
         }
@@ -385,7 +387,7 @@ class EmbeddingIndexer:
     # ----------------------------------------------------------
     # حفظ الفهرس
     # ----------------------------------------------------------
-
+# لحتى ما اضطر ااعيد بناء الفهرس بكل مرة و توخذ وقت
     def save_index(self, dataset_name: str) -> Path:
         """
         يحفظ الفهرس في 5 ملفات:
@@ -555,7 +557,7 @@ class EmbeddingIndexer:
             normalize_embeddings=True,  # نفس normalize عند البناء
         )
         return query_vec.astype(np.float32)
-
+      
     def get_top_k(
         self,
         query_embedding: np.ndarray,
