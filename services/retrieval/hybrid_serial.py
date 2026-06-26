@@ -165,12 +165,14 @@ class HybridSerialRetriever:
             [query_text],
             convert_to_numpy=True,
             show_progress_bar=False,
+            # تفعيل normalize_embeddings=True يقوم بجعل طول المتجه في الفضاء الرياضي يساوي 1 (Unit Vector). هذا يسهل حساب الشبه اللغوي لاحقاً بعملية ضرب بسيطة جداً.
             normalize_embeddings=True,
         ).astype(
             np.float32
         )  # shape: (1, dim)
 
         # تحويل نصوص المرشحين دفعةً واحدة (batch أسرع من واحد واحد)
+        # نقوم باستخراج النصوص الكاملة للـ 100 وثيقة مرشحة، ونمررها للموديل ليقوم بعملية الـ Encoding لها كدُفعة واحدة (Batch Processing). معالجة المصفوفات دفعة واحدة تستغل ميزات المعالجة المتوازية في المعالج (أو كارت الشاشة GPU إن وجد) وتكون أسرع بعشرات المرات من عمل حلقة تكرارية وتمريرها وثيقة وثيقة. هذه أيضاً تم عمل هندسة تسوية لها
         candidate_texts = [c.text for c in candidates]
         candidate_embs = model.encode(
             candidate_texts,
@@ -182,6 +184,7 @@ class HybridSerialRetriever:
         )  # shape: (N_candidates, dim)
 
         # Cosine Similarity (بعد normalize = dot product)
+        # لحساب درجة تشابه جيب التمام (Cosine Similarity) بين الاستعلام والـ 100 وثيقة، لا نحتاج لكتابة معادلات أو حلقات معقدة. بما أن المتجهات تم عمل تسوية لها مسبقاً، فإن تشابه جيب التمام يساوي رياضياً الضرب النقطي (Dot Product) مباشرة
         scores = (candidate_embs @ query_emb.T).flatten()  # shape: (N_candidates,)
 
         # ترتيب تنازلي

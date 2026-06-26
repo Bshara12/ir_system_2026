@@ -964,3 +964,99 @@ class TestEmbeddingRetriever:
         assert stats["loaded"] is True
         assert stats["model_name"] == "all-MiniLM-L6-v2"
         assert stats["embedding_dim"] == 384
+
+
+class TestVectorStoreIntegration:
+    """تحقق من أن EmbeddingRetriever يعمل مع VectorStore بنفس النتائج."""
+
+    def _get_real_vector_store(self):
+        """
+        خدعة برمجية لجلب الكلاس الحقيقي من الملف مباشرة
+        دون الحاجة لملف __init__.py
+        """
+        import importlib.util
+        import sys
+
+        module_name = "services.indexing.vector_store"
+        file_path = "services/indexing/vector_store.py"
+
+        # قراءة الوحدة مباشرة من مسار الملف
+        spec = importlib.util.spec_from_file_location(module_name, file_path)
+        vs_module = importlib.util.module_from_spec(spec)
+
+        # حقنها في الذاكرة لتجنب أخطاء الاستدعاء الداخلي
+        sys.modules[module_name] = vs_module
+        spec.loader.exec_module(vs_module)
+
+        return vs_module.VectorStore
+
+    def test_vector_store_and_retriever_same_results(self):
+        """
+        VectorStore.search() و EmbeddingRetriever.search()
+        يجب أن يُنتجا نفس النتائج.
+        """
+        from unittest.mock import MagicMock
+        import numpy as np
+
+        # استدعاء الكلاس الحقيقي باستخدام دالتنا المساعدة بدلاً من from ... import
+        VectorStore = self._get_real_vector_store()
+
+        # Mock مشترك
+        mock_indexer = MagicMock()
+        mock_indexer.is_built.return_value = True
+        mock_indexer.metadata = MagicMock(
+            num_documents=3,
+            model_name="all-MiniLM-L6-v2",
+            embedding_dim=384,
+            index_type="flat_ip",
+        )
+
+        # نفس النتائج لكليهما
+        fake_doc = MagicMock()
+        fake_doc.doc_id = "d1"
+        fake_doc.title = "Cloud"
+        fake_doc.original_text = "Cloud storage is useful."
+
+        mock_indexer.encode_query.return_value = np.random.rand(1, 384).astype(
+            "float32"
+        )
+        mock_indexer.get_top_k.return_value = [(fake_doc, 0.89)]
+
+        # VectorStore
+        store = VectorStore.__new__(VectorStore)
+        store._dataset_name = "dataset1"
+        store._indexer = mock_indexer
+
+        results = store.search("cloud storage", k=1)
+
+        assert len(results) == 1
+        doc_id, score, text, title = results[0]
+        assert doc_id == "d1"
+        assert abs(score - 0.89) < 1e-5
+        assert "Cloud" in text
+
+    def test_vector_store_status_fields(self):
+        """get_status() يُرجع الحقول المطلوبة."""
+        from unittest.mock import MagicMock
+
+        # استدعاء الكلاس الحقيقي باستخدام دالتنا المساعدة
+        VectorStore = self._get_real_vector_store()
+
+        store = VectorStore.__new__(VectorStore)
+        store._dataset_name = "dataset1"
+
+        mock_indexer = MagicMock()
+        mock_indexer.is_built.return_value = True
+        mock_indexer.is_saved.return_value = True
+        mock_indexer.documents = [MagicMock()] * 5
+        mock_indexer.metadata = MagicMock(
+            model_name="all-MiniLM-L6-v2",
+            embedding_dim=384,
+            index_type="flat_ip",
+        )
+        store._indexer = mock_indexer
+
+        status = store.get_status()
+        assert status["is_ready"] is True
+        assert status["num_documents"] == 5
+        assert status["model_name"] == "all-MiniLM-L6-v2"

@@ -30,14 +30,14 @@ Retrieval Service يستدعي هذه الخدمة عندما:
 
 التدفق:
     User → Gateway → Retrieval (8003)
-                         ↓ (إذا apply_refinement=true)
-               Query Refinement (8004)
-                         ↓
-               استعلام مُحسَّن
-                         ↓
-               الفهرس (BM25/TFIDF/Embedding)
-                         ↓
-               نتائج أفضل للمستخدم
+                        ↓ (إذا apply_refinement=true)
+              Query Refinement (8004)
+                        ↓
+              استعلام مُحسَّن
+                        ↓
+              الفهرس (BM25/TFIDF/Embedding)
+                        ↓
+              نتائج أفضل للمستخدم
 
 تشغيل:
     uvicorn services.query_refinement.app:app --port 8004 --reload

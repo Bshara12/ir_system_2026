@@ -145,6 +145,7 @@ class SuggestionEngine:
 
         partial_lower = partial_query.lower().strip()
         suggestions: List[str] = []
+        # الاستعانة بالـ Set هنا ضرورة هندسية لتفادي مشكلة التكرار، ولأن التحقق من وجود عنصر داخل الـ Set يستغرق زمناً ثابتاً قدره $O(1)$ مقارنة بالمصفوفات التي تستغرق $O(N)$
         seen: Set[str] = set()
 
         def add_suggestion(s: str) -> bool:

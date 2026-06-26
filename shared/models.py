@@ -46,7 +46,7 @@ class RetrievalModel(str, Enum):
 class DatasetName(str, Enum):
     """مجموعات البيانات المدعومة."""
     DATASET_1 = "dataset1"   # مجموعة البيانات الأولى
-    DATASET_2 = "dataset2"   # مجموعة البيانات الثانية
+    DATASET_2 = "quora"   # مجموعة البيانات الثانية
     TREC_COVID = "trec-covid"   # مجموعة بيانات TREC-COVID
     QUORA = "quora"   # مجموعة بيانات Quora الكاملة
 
