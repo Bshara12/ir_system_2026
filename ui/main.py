@@ -231,6 +231,105 @@ def perform_search(
         st.error(f"❌ خطأ: {str(e)}")
         return None, None
 
+# =============================================================
+# واجهة المستخدم الفعّالة (UI Elements)
+# =============================================================
+
+st.title("🔍 محرك البحث الدلالي (IR Search Engine)")
+
+# 1. القائمة الجانبية (Sidebar) للإعدادات
+with st.sidebar:
+    st.header("⚙️ إعدادات النظام")
+    
+    # تحديد مسار الـ Gateway
+    st.session_state["gateway_url"] = st.text_input(
+        "مسار الـ Gateway:", 
+        value="http://127.0.0.1:8000"
+    )
+    
+    # زر فحص حالة الخدمات
+    if st.button("🔄 فحص حالة الخدمات", use_container_width=True):
+        with st.spinner("جاري فحص الخدمات..."):
+            statuses = check_services_health(st.session_state["gateway_url"])
+            if statuses:
+                st.markdown("### حالة الخدمات:")
+                for s in statuses:
+                    icon = "✅" if s.status == "healthy" else "❌"
+                    color_class = "health-status-healthy" if s.status == "healthy" else "health-status-unhealthy"
+                    st.markdown(
+                        f"<div style='margin-bottom: 5px;'><span class='{color_class}'>{icon} {s.service_name}</span></div>", 
+                        unsafe_allow_html=True
+                    )
+    
+    st.divider()
+    
+    # إعدادات البحث
+    st.header("🎯 إعدادات البحث")
+    selected_dataset = st.selectbox("مجموعة البيانات (Dataset):", DATASET_OPTIONS)
+    selected_model = st.selectbox("نموذج البحث (Model):", SEARCH_MODEL_OPTIONS)
+    top_k = st.slider("عدد النتائج (Top K):", min_value=1, max_value=50, value=10)
+    apply_refinement = st.checkbox("تفعيل تحسين الاستعلام (Query Refinement)", value=False)
+    
+    with st.expander("معاملات BM25 (متقدم)"):
+        bm25_k1 = st.number_input("k1", value=1.5, step=0.1)
+        bm25_b = st.number_input("b", value=0.75, step=0.1)
+
+# 2. منطقة البحث الرئيسية
+st.markdown("### أدخل استعلامك هنا:")
+query = st.text_input("شريط البحث", label_visibility="collapsed", placeholder="اكتب ما تبحث عنه... (مثال: cloud computing architecture)")
+
+# زر البحث
+search_button = st.button("🔍 بحث", type="primary", use_container_width=True)
+
+if search_button:
+    if not query.strip():
+        st.warning("⚠️ يرجى إدخال نص للبحث عنه أولاً.")
+    else:
+        with st.spinner("جاري البحث في الوثائق..."):
+            # استدعاء دالة البحث
+            response, agent_decision = perform_search(
+                query=query,
+                gateway_url=get_gateway_url(),
+                dataset=selected_dataset,
+                model=selected_model,
+                top_k=top_k,
+                bm25_k1=bm25_k1,
+                bm25_b=bm25_b,
+                apply_refinement=apply_refinement,
+            )
+            
+            if response:
+                st.markdown(
+                    f"<div class='success-message'>✅ تم العثور على <strong>{response.total_results}</strong> نتيجة في <strong>{response.processing_time:.3f}</strong> ثانية.</div>",
+                    unsafe_allow_html=True
+                )
+                
+                # إذا تم استخدام الوكيل الذكي (AUTO_AGENT)، نعرض قراره
+                if agent_decision:
+                    with st.expander("🤖 قرار الوكيل الذكي (Agent Reasoning)"):
+                        st.json(agent_decision)
+                
+                st.markdown("---")
+                
+                # عرض النتائج باستخدام الـ CSS المخصص
+                if not response.results:
+                    st.info("لم يتم العثور على وثائق مطابقة.")
+                else:
+                    for doc in response.results:
+                        st.markdown(
+                            f"""
+                            <div class="result-card">
+                                <div class="result-title">📄 وثيقة رقم: {doc.doc_id}</div>
+                                <div class="result-meta">
+                                    <span class="result-score">⭐ التقييم (Score): {doc.score:.4f}</span>
+                                </div>
+                                <div style="color: #333; line-height: 1.6;">
+                                    {doc.text[:400]}{'...' if len(doc.text) > 400 else ''}
+                                </div>
+                            </div>
+                            """,
+                            unsafe_allow_html=True
+                        )
 
 def display_result_card(result: DocumentResult, index: int):
     """عرض بطاقة نتيجة واحدة."""

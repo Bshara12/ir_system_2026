@@ -74,7 +74,7 @@ class VectorStore:
         store.load()
 
         # بحث
-        results = store.search("fever treatment", k=5)
+         results = store.search("fever treatment", k=5)
         for doc_id, score, text, title in results:
             print(f"[{score:.3f}] {title}: {text[:100]}")
 

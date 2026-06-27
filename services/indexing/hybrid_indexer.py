@@ -222,7 +222,7 @@ class HybridIndexer:
     def load_indexes(
         self,
         dataset_name:   str,
-        load_bm25:      bool = True,
+        load_bm25:      bool = True,  
         load_embedding: bool = True,
     ) -> None:
         """
