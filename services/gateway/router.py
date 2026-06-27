@@ -18,6 +18,7 @@ from shared.constants import (
 )
 
 from .service_client import check_service_health, post_json
+from .agent import choose_retrieval_strategy
 
 
 router = APIRouter()
@@ -67,6 +68,33 @@ async def search(request: RetrievalRequest) -> RetrievalResponse:
 	else:
 		# إعادة الخطأ كما هو من الخدمة الخلفية
 		raise HTTPException(status_code=status_code, detail=data)
+
+
+@router.post(
+	"/agent/search",
+	tags=["Gateway"],
+	responses={503: {"model": ErrorResponse}},
+)
+async def agent_search(request: dict):
+	"""Choose a retrieval strategy, forward to Retrieval Service, and include the decision."""
+	query = str(request.get("query", ""))
+	agent_decision = choose_retrieval_strategy(query)
+
+	search_payload = dict(request)
+	search_payload["model"] = agent_decision["strategy"]
+
+	try:
+		status_code, data = await post_json(f"{RETRIEVAL_URL}/search", json_data=search_payload)
+	except Exception as e:
+		raise HTTPException(status_code=503, detail=f"Cannot reach Retrieval service: {e}")
+
+	if status_code == 200:
+		if isinstance(data, dict):
+			data["agent_decision"] = agent_decision
+			return data
+		return {"response": data, "agent_decision": agent_decision}
+
+	raise HTTPException(status_code=status_code, detail=data)
 
 
 @router.post("/evaluate/demo", tags=["Evaluation"])

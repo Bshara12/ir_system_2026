@@ -75,3 +75,6 @@ STEP2_*.md
 requirements_clean.txt
 __pycache__/
 *.pyc
+_incoming_data/
+backup_before_new_dataset/
+backup_before_quora_update/
